@@ -15,15 +15,26 @@ clients = {}
 
 
 def handle_client(client_socket, address):
+    client_socket.send("Welcome to the chatroom! Please enter your username:".encode("utf-8"))
     nom = client_socket.recv(1024).decode("utf-8")
+    
     print(f"New connection from {address}, username: {nom}")
     broadcast(f"{nom} has joined the chat.")
+
+    clients[nom] = client_socket
 
     while True:
         try:
             message = client_socket.recv(1024).decode("utf-8")
             if message:
-                broadcast(f"{nom}: {message}")
+                if message.lower() == 'quit':
+                    print(f"{nom} has exited the chat.")
+                    client_socket.close()
+                    del clients[nom]
+                    broadcast(f"{nom} has left the chat.")
+                    break
+                else:
+                    broadcast(f"{nom}: {message}")
             else:
                 print(f"Connection closed for {address}, username: {nom}")
                 client_socket.close()
@@ -50,9 +61,6 @@ while connected:
         if socket_obj is serveur:
             client, adresse = serveur.accept()
             socketLs.append(client)
-            client.send("Welcome to the chatroom! Please enter your username:".encode("utf-8"))
-            username = client.recv(1024).decode("utf-8")
-            clients[username] = client
 
             client_thread = threading.Thread(target=handle_client, args=(client, adresse))
             client_thread.start()
