@@ -14,15 +14,14 @@ socketLs = [serveur]
 clients = {}
 
 
-def handle_client(client_socket, address):
+def listen_to_clients(client_socket, address):
     client_socket.send("Welcome to the chatroom! Please enter your username:".encode("utf-8"))
     nom = client_socket.recv(1024).decode("utf-8")
 
-    print(f"New connection from {address}, username: {nom}")
-    broadcast(f"{nom} has joined the chat.", client_socket)
+    print(f"New connection from {address}, username: {nom}\n")
+    broadcast(f"{nom} has joined the chat.\n", client_socket)
 
     clients[nom] = client_socket
-    update_clients_list()
 
     while True:
         try:
@@ -33,7 +32,6 @@ def handle_client(client_socket, address):
                     client_socket.close()
                     del clients[nom]
                     broadcast(f"{nom} has left the chat.\n")
-                    update_clients_list()
                     break
                 elif message.startswith('@'):
                     recipient, private_msg = message[1:].split(':', 1)
@@ -49,7 +47,6 @@ def handle_client(client_socket, address):
                 client_socket.close()
                 del clients[nom]
                 broadcast(f"{nom} has left the chat.\n")
-                update_clients_list()
                 break
         except Exception as e:
             print(f"Error: {e}")
@@ -71,9 +68,6 @@ def p2pMsg(message, receiver):
     except Exception as e:
         print(f"Error sending the message: {e}")
 
-def update_clients_list():
-    client_list = ", ".join(clients.keys())
-    broadcast(f"Connected clients: {client_list}")
 
 
 while connected:
@@ -84,9 +78,8 @@ while connected:
             client, adresse = serveur.accept()
             socketLs.append(client)
 
-            client_thread = threading.Thread(target=handle_client, args=(client, adresse))
+            client_thread = threading.Thread(target=listen_to_clients, args=(client, adresse))
             client_thread.start()
 
         else:
-            # Existing clients are handled by the threads, so we don't need to do anything here.
             pass
