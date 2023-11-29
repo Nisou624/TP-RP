@@ -2,84 +2,76 @@ import socket
 import select
 import threading
 
-serveur = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 host, port = "127.0.0.1", 8921
 
-serveur.bind((host, port))
-serveur.listen(4)
+server.bind((host, port))
+server.listen(2)
 
 connected = True
-socketLs = [serveur]
+socket_list = [server]
 clients = {}
+player_choices = {}
 
+def send_to_player(player_num, message):
+    player_socket = clients[f"Player{player_num}"]
+    try:
+        player_socket.send(message.encode("utf-8"))
+    except Exception as e:
+        print(f"Error sending message to Player{player_num}: {e}")
 
-def listen_to_clients(client_socket, address):
-    client_socket.send("Welcome to the chatroom! Please enter your username:".encode("utf-8"))
-    nom = client_socket.recv(1024).decode("utf-8")
-
-    print(f"New connection from {address}, username: {nom}\n")
-    broadcast(f"{nom} has joined the chat.\n", client_socket)
-
-    clients[nom] = client_socket
+def handle_game(player1, player2):
+    choices = ["rock", "paper", "scissors"]
+    send_to_player(1, "Welcome to the Rock-Paper-Scissors game! Please enter your choice (rock, paper, scissors, or quit):")
 
     while True:
-        try:
-            message = client_socket.recv(1024).decode("utf-8")
-            if message:
-                if message.lower() == 'quit':
-                    print(f"{nom} has exited the chat.\n")
-                    client_socket.close()
-                    del clients[nom]
-                    broadcast(f"{nom} has left the chat.\n")
-                    break
-                elif message.startswith('@'):
-                    recipient, private_msg = message[1:].split(':', 1)
-                    if recipient in clients:
-                        p2pMsg(f"{nom} (private): {private_msg}", clients[recipient])
-                    else:
-                        client_socket.send(f"User '{recipient}' not found or offline.".encode("utf-8"))
-                else:
-                    broadcast(f"{nom} (groupChat): {message}", client_socket)
+        send_to_player(2, "Waiting for Player 1 to make a choice...")
+        choice_player1 = player1.recv(1024).decode("utf-8")
+        player_choices["Player1"] = choice_player1
 
-            else:
-                print(f"Connection closed for {address}, username: {nom}")
-                client_socket.close()
-                del clients[nom]
-                broadcast(f"{nom} has left the chat.\n")
-                break
-        except Exception as e:
-            print(f"Error: {e}")
+        send_to_player(1, "Waiting for Player 2 to make a choice...")
+        choice_player2 = player2.recv(1024).decode("utf-8")
+        player_choices["Player2"] = choice_player2
+
+        if "quit" in [choice_player1.lower(), choice_player2.lower()]:
             break
 
+        send_to_player(1, f"Player 1 chose: {choice_player1}")
+        send_to_player(2, f"Player 2 chose: {choice_player2}")
 
-def broadcast(message, socket=None):
-    for client_socket in clients.values():
-        if socket is None or client_socket != socket:
-            try:
-                client_socket.send(message.encode("utf-8"))
-            except Exception as e:
-                print(f"Error broadcasting message: {e}")
+        if choice_player1.lower() == choice_player2.lower():
+            send_to_player(1, "It's a tie!")
+            send_to_player(2, "It's a tie!")
+        elif (choice_player1.lower() == "rock" and choice_player2.lower() == "scissors") or \
+             (choice_player1.lower() == "paper" and choice_player2.lower() == "rock") or \
+             (choice_player1.lower() == "scissors" and choice_player2.lower() == "paper"):
+            send_to_player(1, "Player 1 wins!")
+            send_to_player(2, "Player 1 wins!")
+        else:
+            send_to_player(1, "Player 2 wins!")
+            send_to_player(2, "Player 2 wins!")
 
-
-def p2pMsg(message, receiver):
-    try:
-        receiver.send(message.encode("utf-8"))
-    except Exception as e:
-        print(f"Error sending the message: {e}")
-
-
+    send_to_player(1, "Game over. Thanks for playing!")
+    send_to_player(2, "Game over. Thanks for playing!")
 
 while connected:
-    liste_lue, liste_acce_Ecrit, exception = select.select(socketLs, [], socketLs)
+    read_list, _, _ = select.select(socket_list, [], [])
+    for sock in read_list:
+        if sock == server:
+            client, address = server.accept()
+            socket_list.append(client)
 
-    for socket_obj in liste_lue:
-        if socket_obj is serveur:
-            client, adresse = serveur.accept()
-            socketLs.append(client)
+            player_num = len(clients) + 1
+            clients[f"Player{player_num}"] = client
+            print(f"Player {player_num} connected from {address}")
 
-            client_thread = threading.Thread(target=listen_to_clients, args=(client, adresse))
-            client_thread.start()
+            if player_num == 1:
+                print("Waiting for Player 2 to connect...")
+            elif player_num == 2:
+                print("Both players connected. Starting the game...")
+                game_thread = threading.Thread(target=handle_game, args=(clients["Player1"], clients["Player2"]))
+                game_thread.start()
 
         else:
             pass
