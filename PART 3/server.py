@@ -38,8 +38,7 @@ def broadcast(message, socket=None):
     for client_socket in players:
         if socket is None or client_socket != socket:
             try:
-                client_socket.send(message.encode("utf-8"))
-                print("broadcasted")
+                client_socket.send(message)
             except Exception as e:
                 print(f"Error broadcasting message: {e}")
 
@@ -78,16 +77,8 @@ def listen_to_clients(socket, address):
                     p2_done = True
                     print("received from 2")
         else:
-            #print("listening to moves")
-            data = socket.recv(4096).decode("utf-8").split(".")[0]
-            if data.split(":")[0].strip() == "move":
-                print("received move infos")
-                target = int(data.split(":")[1].strip()) - 1
-                players[target].send(data.encode("utf-8"))
-                print(f"sent move infos to  player {target}")
-
-
-
+            data = socket.recv(2048)
+            broadcast(data, socket)
             
 
 

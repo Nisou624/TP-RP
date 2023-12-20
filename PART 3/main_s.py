@@ -1,5 +1,6 @@
 from os import listdir
 from os.path import isfile, join
+import pickle
 import pygame
 from Sprite import Sprite
 from const import *
@@ -324,6 +325,7 @@ class Player(pygame.sprite.Sprite):
         if has_controls:
             #can_send_moves = False
             controls_to_send = pygame.key.get_pressed()
+            #print("size of controls before sent ",len(controls_to_send))
             #can_send_moves = True
             #print("player should be able to send his move infos")
             if controls_to_send[pygame.K_LEFT] and not collide_left:
@@ -337,9 +339,10 @@ class Player(pygame.sprite.Sprite):
                     self.attack()
             else:
                 self.x_vel = 0
+            
         else:
-            if controls_received != None:
-                print("received controls exists")
+            if controls_received is not None:
+                print("size when received: ", len(controls_received))
                 if controls_received[pygame.K_LEFT] and not collide_left:
                     self.move_left(self.PLAYER_VEL)
                 elif controls_received[pygame.K_RIGHT] and not collide_right:
@@ -351,7 +354,7 @@ class Player(pygame.sprite.Sprite):
                         self.attack()
                 else:
                     self.x_vel = 0
-                controls_received = None
+                #controls_received = None
                 
     
         self.handle_vertical_collision([object for object in objects if not isinstance(object, Player)])
@@ -436,21 +439,12 @@ def listen_server(arg1, arg2):
                 print("game should start")
                 client.send("received.".encode("utf-8"))
         else:
-            #print("listening to moves and sending moves")
-            controls = client.recv(4096).decode("utf-8").split(".")[0]
-            if controls.split(":")[0].strip() == "move":
-                print("received the other player move infos")
-                if int(controls.split(":")[1].strip()) == whoami:
-                    controls_received = controls.split(":"[2].strip())
-                    print("received controls")
-            #if can_send_moves:
-            print("will send his move infos")
-            target = 3 - whoami
-            client.send(f"move : {target} : {controls_to_send}.".encode("utf-8"))
-            print("sent controls")
-
+            # When sending
+            client.send(pickle.dumps(controls_to_send))
             
-    
+            # When receiving
+            controls = client.recv(4096)
+            controls_received = pickle.loads(controls)
 
 
 
