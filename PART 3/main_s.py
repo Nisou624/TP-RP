@@ -2,10 +2,8 @@ from os import listdir
 from os.path import isfile, join
 import pickle
 import pygame
-from Sprite import Sprite
 from const import *
 import socket
-import json
 from _thread import *
 
 pygame.init()
@@ -23,6 +21,8 @@ font = pygame.font.SysFont("arialblack", 40)
 
 
 maps = [pygame.image.load("PART 3/assets/maps/plain.png"), pygame.image.load("PART 3/assets/maps/oak_wood.png"), pygame.image.load("PART 3/assets/maps/stringstar.png")]
+
+
 
 player_1 = None
 player_2 = None
@@ -48,6 +48,18 @@ menu_state = Menu_state.Main
 m_state = None
 is_connected = False
 
+
+
+class HealthBar:
+    def __init__(self, x, player):
+        self.player = player
+        self.x = x
+        self.y = HEALTH_BAR_Y
+
+    def draw(self):
+        ratio = self.player.health / 100
+        pygame.draw.rect(window, (255, 0, 0), (self.x, self.y, 250, 30))
+        pygame.draw.rect(window, (0, 255, 0), (self.x, self.y, 250 * ratio, 30))
 
 def read_pos(str):
     str = str.split(",")
@@ -136,17 +148,11 @@ class Player(pygame.sprite.Sprite):
         self.death_anim = False
 
     def jump(self):
-        #print("Before jump - Player position:", self.rect.x, self.rect.y)
-        #print("Before jump - Player y_vel:", self.y_vel, "jump counter:", self.jump_count)
-
         self.y_vel = -self.GRAVITY * 5
         self.animation_count = 0
         self.jump_count += 1
         if self.jump_count == 1:
             self.fall_count = 0
-
-        #print("After jump - Player position:", self.rect.x, self.rect.y)
-        #print("After jump - Player y_vel:", self.y_vel, "jump counter:", self.jump_count)
 
     def move(self, dx, dy):
         self.rect.x += dx
@@ -184,20 +190,10 @@ class Player(pygame.sprite.Sprite):
                 sprite_sheet = "fall"
             elif self.x_vel != 0:
                 sprite_sheet = "run"
-            #elif 0 < self.hit_count < self.attack_cooldown / 2:
-            #    self.attacking = True
-            #    sprite_sheet = "attack"
-            #    self.hit_count += 1
-            #elif self.hit_count >= self.attack_cooldown / 2:
-            #    self.attacking = False
-            #    self.hit_count = 0
 
             if self.attack_cooldown > 0:
                 if self.attack_cooldown > ANIM_DELAY["attack"] * 7:
                     sprite_sheet = "attack"
-                    #self.attacking = True
-                #else:
-                #    self.animation_count = 0
                 self.attack_cooldown -= 1
             else:
                 self.attacking = False
@@ -292,29 +288,6 @@ class Player(pygame.sprite.Sprite):
         return collided_object
 
 
-    def listen(self, objects, controls=True):
-
-        
-        collide_left = self.collide(objects, -PLAYER_VEL * 2) #self.collide([obj for obj in objects if obj.name != "terrain"], -PLAYER_VEL * 2)
-        collide_right = self.collide(objects, PLAYER_VEL * 2)
-
-
-        if controls:
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_LEFT] and not collide_left:
-                self.move_left(self.PLAYER_VEL)
-            elif keys[pygame.K_RIGHT] and not collide_right:
-                self.move_right(self.PLAYER_VEL)
-            elif keys[pygame.K_UP]:
-                if not self.attacking:
-                    self.attacking = True
-                    self.animation_count = 0
-                    self.attack()
-            else:
-                self.x_vel = 0
-
-        self.handle_vertical_collision([object for object in objects if not isinstance(object, Player)])
-
     def listen_online(self, objects, has_controls):
         global controls_received, controls_to_send, can_send_moves
     
@@ -342,7 +315,6 @@ class Player(pygame.sprite.Sprite):
             
         else:
             if controls_received is not None:
-                print("size when received: ", len(controls_received))
                 if controls_received[pygame.K_LEFT] and not collide_left:
                     self.move_left(self.PLAYER_VEL)
                 elif controls_received[pygame.K_RIGHT] and not collide_right:
@@ -363,7 +335,8 @@ class Player(pygame.sprite.Sprite):
 def game_online(p1, p2):
     terrain = Block(0, HEIGHT - TERRAIN_SIZES[selected_world], "terrain", TERRAIN_SIZES[selected_world])
     window.blit(pygame.transform.scale_by(maps[selected_world], 4), (0, 0))
-    
+    hp_1 = HealthBar(50, p1)
+    hp_2 = HealthBar(900, p2)
     # Determine which player to draw based on the 'whoami' value
 
     p1.loop(FPS)
@@ -378,6 +351,8 @@ def game_online(p1, p2):
     else:
         p2.listen_online([terrain, p1], True)
         p1.listen_online([terrain, p2], False)
+    hp_1.draw()
+    hp_2.draw()
 class Object(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height, name=""):
         super().__init__()
@@ -400,13 +375,7 @@ class Block(Object):
         self.image.set_alpha(0)  # Set alpha value to 0 for transparency
         self.mask = pygame.mask.from_surface(self.image)  # Create a mask from the image
 
-sp = Button("Singleplayer", WIDTH/2 - 200 / 2, 100, (52,78,91))
-mp = Button("Multiplayer", WIDTH/2 - 200 / 2, 250, (52,78,91))
-quit = Button("Quit", WIDTH/2 - 200 / 2, 400, (52,78,91))
-confirm = Button("Confirm", WIDTH / 2 - 200 / 2, HEIGHT - 200, (52,78,91))
 
-def get_background():
-    pass
 
 def listen_server(arg1, arg2):
     global game_started, whoami, player_1, player_2, controls_to_send, controls_received, can_send_moves
@@ -435,7 +404,6 @@ def listen_server(arg1, arg2):
                     player_1 = Player(pos[0], pos[1], 96, 96)
                     print("your ennemy (1) pos are: ", pos)
             if player_1 != None and player_2 != None:
-                game_started = True
                 print("game should start")
                 client.send("received.".encode("utf-8"))
         else:
@@ -445,95 +413,6 @@ def listen_server(arg1, arg2):
             # When receiving
             controls = client.recv(4096)
             controls_received = pickle.loads(controls)
-
-
-
-
-
-
-def multi():
-    if m_state == None:
-        draw_text("Waiting for connection", font, (0, 0, 0), WIDTH / 2 - 200, HEIGHT / 2 - 200)
-    elif m_state == Multiplayer_state.Map:
-        draw_selection()
-        if selected_world != -1:
-            client.send(f"map : {selected_world}".encode("utf-8"))
-    elif m_state == Multiplayer_state.Pos:
-        if player_2 == None:
-            draw_text("Waiting for Player 2", font, (0, 0, 0), WIDTH /2 - 200, HEIGHT / 2 - 200)
-        else:
-            if not player_1 == None:
-                client.send("received".encode("utf-8"))
-    elif m_state == Multiplayer_state.InGame:
-        game_online(player_1, player_2)
-        
-
-def draw_menu():
-    global menu_state, is_connected
-    if menu_state == Menu_state.Main:
-        sp.draw(window)
-        mp.draw(window)
-        quit.draw(window)
-    elif menu_state == Menu_state.Singleplayer:
-        draw_selection()
-    elif menu_state == Menu_state.Multiplayer:
-        try:
-            if not is_connected:
-                client.connect((HOST, PORT))
-                start_new_thread(listen_server, (None, None))
-                is_connected = True
-            multi()
-        except Exception as e:
-            print(f"Error connecting to the server: {e}")
-            exit()
-
-def mouse_hovering(x, y, width, height):
-    pos = pygame.mouse.get_pos()
-    if x <= pos[0] <= x + width and y <= pos[1] <= y + height:
-        return True
-    else:
-        return False
-
-def draw_selection():
-    global global_state, selected_world, config_state, menu_state
-    chosen_world = -1
-    if config_state == Config_state.Map:
-        confirm.draw(window)
-        if pygame.mouse.get_pressed()[0]:
-            if confirm.click(pygame.mouse.get_pos()):
-                print(f"selected world: {selected_world}")
-                print("confirmed")
-                print(config_state)
-                if selected_world != -1:
-                    config_state = Config_state.Character
-                    
-        worlds = [Sprite('PART 3/assets/worlds/earth.png', 180), Sprite('PART 3/assets/worlds/oak_wood.png', 180), Sprite('PART 3/assets/worlds/stringstar.png', 180)]
-        x_padding = WIDTH / len(worlds) - 100
-        for i in range(len(worlds)):
-            if mouse_hovering(100 + (100 + x_padding) * i, HEIGHT / 2 - 50, 100, 100):
-                worlds[i].update()
-                selected_world = i
-            window.blit(worlds[i].animate(0, worlds[i].image.get_width() / 100), (100 + (100 + x_padding) * i, HEIGHT / 2 - 50))
-        
-    elif config_state == Config_state.Character and menu_state == Menu_state.Singleplayer:
-        global_state = Game_state.In_game
-        
-def game(p1, p2):
-    terrain = Block(0, HEIGHT - TERRAIN_SIZES[selected_world], "terrain", TERRAIN_SIZES[selected_world])
-    wall = Block(250, HEIGHT - 100 - TERRAIN_SIZES[selected_world], "wall", 100, 100)
-    window.blit(pygame.transform.scale_by(maps[selected_world], 4), (0, 0))
-    pygame.draw.rect(window, (255,0,0), p1.rect, 2)
-    p1.loop(FPS)
-    p1.draw(window)
-    p2.loop(FPS)
-    p2.draw(window)
-    p1.listen([terrain, p2])#, wall
-    p2.listen([terrain, p1], False)
-    #if not p2.alive:
-    #    print("player died")
-    #if pygame.sprite.collide_mask(player, p2):
-    #    print("p2 health:", p2.health)
-
 
 def main(window):
     global global_state, menu_state, game_started, is_connected
@@ -552,18 +431,6 @@ def main(window):
         
         if game_started:
             game_online(player_1, player_2)
-
-        if pygame.mouse.get_pressed()[0]:
-                pos = pygame.mouse.get_pos()
-                if global_state == Game_state.Main_menu:
-                    if menu_state == Menu_state.Main:
-                        if sp.click(pos):
-                            menu_state = Menu_state.Singleplayer
-                        if mp.click(pos):
-                            menu_state = Menu_state.Multiplayer
-                        if quit.click(pos):
-                            run = False
-                            break
                     
         
         for event in pygame.event.get():

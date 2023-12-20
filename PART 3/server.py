@@ -31,6 +31,8 @@ def make_pos(tup):
 pos = [100, 1100]
 map = random.choice([0, 1, 2])
 
+game_started = False
+
 def player_id(socket):
     return players.index(socket)
 
@@ -45,7 +47,7 @@ def broadcast(message, socket=None):
 
 
 def listen_to_clients(socket, address):
-    global map
+    global map, game_started
     p1_done = False
     p2_done = False
     while True:
